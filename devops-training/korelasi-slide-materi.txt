@@ -1,0 +1,290 @@
+================================================================
+KORELASI SLIDE TRAINING DEVOPS (PDF) DENGAN FILE MATERI
+Training DevOps - ID-Networkers | Instruktur: Bazigan Tsamara
+================================================================
+
+----------------------------------------------------------------
+1. DEVOPS CONCEPT (Slide 3-12)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- DevOps (Development & Operations) adalah kombinasi filosofi, praktik,
+  dan tools untuk mempercepat pengembangan software.
+- Siklus DevOps: Plan > Code > Build > Test > Release > Deploy >
+  Operate > Monitor (simbol infinity/loop).
+- Pendekatan TRADISIONAL: Developer menulis kode, push ke GitHub,
+  tim infrastruktur deploy dan monitor secara manual (terpisah).
+- Pendekatan DEVOPS: Alur yang sama namun diotomasi melalui CI/CD
+  sehingga build, test, deploy berjalan otomatis tanpa intervensi manual.
+- DevOps Labs Architecture (Slide 12):
+  Git (Local) -> GitHub (SCM) -> Jenkins (CI/CD) -> SonarQube (Code Review)
+  -> Docker (Server) -> Docker Hub (Registry) -> Prometheus (Monitoring)
+  -> Grafana (Dashboard)
+
+KORELASI DENGAN FILE MATERI:
+- README.md          : Rundown training yang mencerminkan alur DevOps Labs
+                       (Git, GitHub, SonarQube, Docker, Jenkins, Prometheus, Grafana)
+- docs-apps.md       : Simple Apps (ExpressJS + MariaDB) adalah aplikasi
+                       yang menjadi objek penerapan seluruh pipeline DevOps
+
+----------------------------------------------------------------
+2. VERSION CONTROL SYSTEM / GIT (Slide 13-20)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Version Control System (VCS) adalah sistem yang menyimpan perubahan
+  file ke dalam sebuah versi (snapshot).
+- Tanpa VCS: file disimpan manual dengan nama berbeda (Skripsi-Revisi-1,
+  Skripsi-Revisi-2, dst) — tidak terstruktur dan rawan hilang.
+- Dengan VCS: setiap perubahan tercatat dengan pesan (commit) yang
+  menjelaskan apa yang berubah. Hanya ada SATU file, tapi semua riwayat
+  tersimpan di dalam repository.
+- Git adalah salah satu open source distributed version control system.
+  Artinya setiap developer memiliki salinan penuh repository di komputernya.
+
+KORELASI DENGAN FILE MATERI:
+- docs-git.md        : Referensi lengkap perintah Git (config, init, add,
+                       commit, branch, merge, tag, revert)
+- tutorial-git.md    : Tutorial praktik Git step-by-step dengan latihan
+                       commit pertama, branching, dan simulasi konflik
+- penjelasan-git.md  : Penjelasan konsep Git dalam Bahasa Indonesia
+                       (konfigurasi, status file, staging, branching, tagging)
+
+PERINTAH KUNCI (dari docs-git.md & tutorial-git.md):
+  git config --global user.name "nama"
+  git config --global user.email "email"
+  git init
+  git status
+  git add . / git add <file>
+  git commit -m "pesan"
+  git branch / git switch / git merge
+  git tag -a v1.0.0 -m "pesan"
+  git revert -n <commit-id>
+
+----------------------------------------------------------------
+3. SOURCE CODE MANAGEMENT / GITHUB (Slide 21-26)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- GitHub adalah Source Code Management (SCM) yang berfungsi menyimpan
+  repository untuk digunakan berkolaborasi tim.
+- Perbedaan Git vs GitHub:
+  Git  : diinstall di host, offline, open source, tidak ada user management
+  GitHub: tidak perlu install, online, ada user management, gratis
+- Remote Repository: Developer A dan B sama-sama terhubung ke satu
+  Remote Repository di GitHub. Operasi yang digunakan:
+  CLONE  -> menyalin repo dari GitHub ke lokal
+  FETCH  -> mengunduh perubahan tanpa merge
+  PULL   -> mengunduh + merge (fetch + merge)
+  PUSH   -> mengirim perubahan lokal ke GitHub
+
+KORELASI DENGAN FILE MATERI:
+- docs-github.md     : Panduan singkat perintah git remote, push, fetch, pull
+                       dan langkah kolaborasi via GitHub Organization
+- tutorial-github.md : Tutorial lengkap GitHub: membuat akun, git remote,
+                       push/pull/fetch, kolaborasi Organization, alur Pull Request
+                       beserta tabel permission (Read/Triage/Write/Maintain/Admin)
+
+PERINTAH KUNCI (dari docs-github.md & tutorial-github.md):
+  git remote add origin <url>
+  git remote -v
+  git push origin main
+  git pull origin main
+  git fetch origin main
+  git clone <url>
+
+----------------------------------------------------------------
+4. SIMPLE APPS - IDN (Slide 27-29)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Simple Apps adalah aplikasi contoh/sampel yang akan diterapkan
+  culture DevOps dalam training ini.
+- Teknologi: NodeJS + NPM + ExpressJS (backend) + MariaDB (database)
+- Arsitektur: User -> ExpressJS (route: /, /app1, /app2, /users)
+  -> MariaDB (db: training, user: peserta, pass: password, table: tb_data)
+
+KORELASI DENGAN FILE MATERI:
+- docs-apps.md       : Panduan setup lengkap Simple Apps:
+                       - Clone source code dari GitHub
+                       - Install NodeJS v18.x
+                       - Install & setup MariaDB
+                       - Import database (training.sql)
+                       - Jalankan app: npm install && npm start
+                       - Akses di http://ip_server:3000
+
+----------------------------------------------------------------
+5. SONARQUBE - SOURCE CODE ANALYSIS (Slide 32-36)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Clean Code: penulisan kode yang mudah dibaca, dimaintain, dipahami,
+  diubah strukturnya, konsisten, dan tetap secure.
+- SonarQube: Automatic code review tool untuk menerapkan clean and secure code.
+- Alur SonarQube dalam DevOps:
+  Code -> Commit -> Push -> SonarLint (IDE) -> Build & Test ->
+  SonarQube/SonarCloud -> Quality Gate -> PASS: Merge/Promote ->
+  FAIL: kembali ke developer untuk diperbaiki
+- Arsitektur SonarQube:
+  Scanner (CI/CD) -> kirim Analysis Report via HTTP -> SonarQube Server
+  (Web Server + Compute Engine + Search Server) -> Database Server
+
+KORELASI DENGAN FILE MATERI:
+- docs-sonarqube.md  : Instalasi SonarQube Server (manual & via Docker):
+                       requirement Java 17, PostgreSQL 15, spek server Ubuntu
+                       4 Core / 8 GB / 30 GB. Konfigurasi sonar.properties,
+                       setup systemd service, akses di port 9000.
+- docs-sonar-scanner.md: Instalasi sonar-scanner CLI, konfigurasi
+                         sonar-project.properties, menjalankan scan dengan/tanpa
+                         exclusion, dengan test coverage (lcov.info)
+- docs-testing.md    : Testing aplikasi (unit test & integration test)
+                       menggunakan npm test & npm run test:coverage
+                       yang hasilnya dipakai oleh sonar-scanner
+
+----------------------------------------------------------------
+6. DOCKER CONTAINERIZATION (Slide 37-54)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Containerization: proses packaging software code dan system library
+  untuk menjalankan sebuah aplikasi secara portable, scalable, efficient, consistent.
+- Analogi: "Makanan di bungkus = Take away, Aplikasi di bungkus = Containerization"
+- Evolusi deployment:
+  Traditional (bare metal) -> Virtualized (VM + Hypervisor) -> Container Deployment
+- Container Runtime: software untuk menjalankan dan manajemen container
+  (cri-o, runc, containerd, docker)
+- Docker Engine: platform opensource higher-level container runtime
+- Docker Architecture: Client (docker run/build/pull) -> Docker Daemon
+  -> Images/Containers di Docker Host -> Registry (Docker Hub)
+- Dockerfile: template untuk membuat docker image
+  Alur: Dockerfile -> (build) -> Docker Image -> (run) -> Docker Container
+- Docker Registry (Docker Hub): storage untuk distribusi & penyimpanan image
+- Docker Storage: volume, bind mount, tmpfs mount
+- Docker Network: isolasi jaringan antar container menggunakan bridge network
+- Docker Compose: alat untuk menjalankan multi-container dari satu file YAML
+  Alur: Dockerfile -> Compose File -> Docker Compose (start semua service)
+- Docker Dashboard (Portainer): web UI untuk manajemen container
+
+KORELASI DENGAN FILE MATERI:
+- docs-docker.md     : Panduan lengkap Docker:
+                       Install Docker (apt repository), perintah dasar docker,
+                       praktik pull/run/exec/commit/save/load container,
+                       membuat Dockerfile, push ke Docker Hub,
+                       Docker Volume, Docker Network, Logging & Troubleshooting,
+                       Portainer (dashboard), Docker Compose
+
+----------------------------------------------------------------
+7. JENKINS CI/CD TOOLS (Slide 55-59)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- CI/CD Pipeline adalah otomasi alur dari commit kode sampai ke production:
+  Commit -> Trigger Build -> Build -> Run Tests -> Deliver Build -> Deploy
+- CI Pipeline: Build + Unit Tests + Integration Tests
+  CD Pipeline: Review + Staging + Production
+- Jenkins adalah free open source CI/CD tools yang menjalankan
+  build, testing, deployment, dan step lainnya secara otomatis.
+- Perbandingan CI/CD Platform:
+  Jenkins (open source, gratis, integrasi bintang 5) vs CircleCI, TeamCity,
+  Bamboo, GitLab (berbayar, fitur built-in lebih banyak)
+
+KORELASI DENGAN FILE MATERI:
+- docs-jenkins.md    : Instalasi Jenkins via apt repository (Java 17 required),
+                       konfigurasi Jenkins Agent, dan contoh Jenkinsfile/Pipeline Script
+                       yang mengotomasi seluruh alur DevOps:
+                       Stage 1 - Pull SCM    : git clone dari GitHub
+                       Stage 2 - Build       : npm install
+                       Stage 3 - Testing     : npm test + npm run test:coverage
+                       Stage 4 - Code Review : sonar-scanner (integrasi SonarQube)
+                       Stage 5 - Deploy      : docker compose up --build -d
+                       Stage 6 - Backup      : docker compose push (ke Docker Hub)
+
+----------------------------------------------------------------
+8. PROMETHEUS MONITORING SYSTEM (Slide 60-67)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Monitoring System: software untuk memantau kinerja infrastruktur,
+  system device, traffic, dan aplikasi, serta memberi alarm jika ada masalah.
+- Platform monitoring: Zabbix, Nagios, Datadog, Prometheus
+- Prometheus: aplikasi perangkat lunak gratis untuk event monitoring dan alerting.
+- Cara kerja Prometheus: setiap scrape interval, Prometheus mengambil
+  data metrics dari endpoint /metrics di setiap service instance.
+  Contoh metrics: memory_bytes_used, http_requests_total, jobs_in_queue
+- Arsitektur Prometheus:
+  Targets (Jobs/Exporters) -> pull metrics -> Prometheus Server (TSDB)
+  -> PromQL query -> Web UI / Grafana / API clients
+  -> Alertmanager -> Email/PagerDuty/dll
+- Linux Host Exporter (Node Exporter): mengumpulkan metrics CPU, disk, memory
+  dari Linux server, diekspos di port 9100
+- Container Exporter (cAdvisor): mengumpulkan metrics dari container Docker,
+  diekspos di port 8080, menggunakan cAdvisor
+
+KORELASI DENGAN FILE MATERI:
+- docs-prometheus.md : Instalasi Prometheus via Docker (port 9090),
+                       konfigurasi prometheus.yml untuk scrape targets,
+                       setup Node Exporter (Linux metrics, port 9100),
+                       setup cAdvisor (Docker metrics, port 8080),
+                       setup Nginx Exporter (port 9113),
+                       setup Alert Rules (server down, CPU/memory > 50%)
+- Prometheus d4e0cdf4ff4240198960cf21d5d36e1e.md:
+                       Instalasi Prometheus manual (tanpa Docker):
+                       setup user/group prometheus, download binary,
+                       konfigurasi systemd service, setup node_exporter
+                       sebagai systemd service juga
+
+----------------------------------------------------------------
+9. GRAFANA DASHBOARDING (Slide 68-72)
+----------------------------------------------------------------
+PENJELASAN DARI SLIDE:
+- Grafana: platform dashboarding atau data visualizer yang dapat
+  memvisualisasikan data dari berbagai sumber (multi-platform).
+- Integrasi dengan Prometheus: Prometheus mengumpulkan metrics dari
+  exporters (node.js, nginx, mysql) -> kirim ke Grafana via PromQL query
+  -> Grafana menampilkan dalam bentuk dashboard visual (grafik, chart)
+- Grafana Cloud: hosted Grafana yang mendukung long term storage,
+  efficient querying, dan scalable infrastructure
+
+KORELASI DENGAN FILE MATERI:
+- docs-grafana.md    : Instalasi Grafana via Docker (port 3000),
+                       akses dashboard di http://ip:3000,
+                       login default admin/admin.
+                       (Grafana terhubung ke Prometheus sebagai data source
+                        untuk visualisasi metrics yang dikumpulkan)
+
+================================================================
+RINGKASAN KORELASI: ALUR PIPELINE DEVOPS TRAINING IDN
+================================================================
+
+  [Developer]
+      |
+      | git add . && git commit -m "..." && git push origin main
+      v
+  [GitHub] ─────────────────────────────────── docs-github.md
+      |                                         tutorial-github.md
+      | webhook / trigger
+      v
+  [Jenkins] ────────────────────────────────── docs-jenkins.md
+      |
+      |── Stage: Pull SCM (git clone dari GitHub)
+      |── Stage: Build    (npm install)          ── docs-apps.md
+      |── Stage: Testing  (npm test + coverage)  ── docs-testing.md
+      |── Stage: Code Review (sonar-scanner)     ── docs-sonarqube.md
+      |                                             docs-sonar-scanner.md
+      |── Stage: Deploy   (docker compose up)    ── docs-docker.md
+      |── Stage: Backup   (docker compose push)  ── docs-docker.md (registry)
+      v
+  [Docker Container berjalan]
+      |
+      | metrics di-scrape setiap interval
+      v
+  [Prometheus] ─────────────────────────────── docs-prometheus.md
+      |         Node Exporter (server metrics)
+      |         cAdvisor (container metrics)
+      |
+      | PromQL query sebagai data source
+      v
+  [Grafana] ─────────────────────────────────── docs-grafana.md
+      |       Dashboard visual: CPU, memory,
+      |       container health, request rate
+      v
+  [Alert] ──────────────────────────────────── docs-prometheus.md
+          (Alertmanager: server down, CPU > 50%)  (bagian setup rule)
+
+================================================================
+Dibuat dari: Slide Training DevOps.pdf (80 halaman) + 13 file materi
+Trainer: Bazigan Tsamara (System Administrator, Certified Kubernetes Admin)
+Penyelenggara: ID-Networkers - Indonesian IT Expert Factory
+================================================================
