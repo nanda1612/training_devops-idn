@@ -55,21 +55,6 @@
   CATATAN: Data asli tersimpan di /var/lib/docker/volumes/ → WAJIB di-backup saat pindah server!
 
 
-4. NETWORK / JARINGAN
---------------------------------------------------------------------------------
-  Network Name    : sonarqube_default
-  IP Container    : 172.18.0.2
-  Gateway         : 172.18.0.1
-  Subnet          : 172.18.0.0/16
-  MAC Address     : 2a:4f:cf:5d:8a:40
-  DNS Names       : sonarqube, cdd879693fa2
-
-  Port Mapping    : 0.0.0.0:9000 (host) -> 9000/tcp (container)
-                    :::9000 (IPv6 host)  -> 9000/tcp (container)
-
-  Akses dari luar : http://IP-SERVER:9000  (SonarQube Web UI)
-
-
 5. DOCKER COMPOSE (FILE KONFIGURASI UTAMA)
 --------------------------------------------------------------------------------
   File Konfigurasi  : /root/sonarqube/docker-compose.yml
