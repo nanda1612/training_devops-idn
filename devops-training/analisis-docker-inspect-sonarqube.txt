@@ -5,6 +5,261 @@
 ================================================================================
 
 
+0. PROSES PEMBUATAN DOCKER CONTAINER (DARI AWAL HINGGA BERJALAN)
+================================================================================
+
+  Docker container tidak muncul begitu saja. Ada tahapan yang harus dilalui
+  dari menulis kode hingga container berjalan di server.
+
+  ============================================================
+  TAHAP 1 — MENULIS DOCKERFILE
+  ============================================================
+
+  Dockerfile adalah file teks berisi instruksi untuk membangun image.
+  Ibarat resep masakan: bahan-bahan + langkah memasak → makanan jadi.
+
+  Contoh Dockerfile SonarQube (ilustrasi):
+  ------------------------------------------
+  # Ambil base image (OS + Java sudah ada di dalamnya)
+  FROM eclipse-temurin:21-jre-jammy
+
+  # Set environment variable
+  ENV SONARQUBE_HOME=/opt/sonarqube
+  ENV SONAR_VERSION=25.11.0.114957
+
+  # Buat user khusus (keamanan: jangan pakai root)
+  RUN groupadd --gid 1000 sonarqube && \
+      useradd --uid 1000 --gid 1000 sonarqube
+
+  # Download & extract SonarQube
+  RUN curl -fsSL https://binaries.sonarsource.com/.../sonarqube.zip \
+      -o /tmp/sonarqube.zip && \
+      unzip /tmp/sonarqube.zip -d /opt/ && \
+      rm /tmp/sonarqube.zip
+
+  # Tentukan direktori kerja
+  WORKDIR /opt/sonarqube
+
+  # Expose port yang digunakan aplikasi
+  EXPOSE 9000
+
+  # Perintah yang dijalankan saat container start
+  ENTRYPOINT ["/opt/sonarqube/docker/entrypoint.sh"]
+  ------------------------------------------
+
+  Instruksi Dockerfile yang umum:
+  +-------------+-------------------------------------------------------+
+  | Instruksi   | Fungsi                                                |
+  +-------------+-------------------------------------------------------+
+  | FROM        | Base image yang digunakan sebagai fondasi             |
+  | RUN         | Jalankan perintah shell saat BUILD image              |
+  | COPY/ADD    | Salin file dari host ke dalam image                   |
+  | ENV         | Set environment variable                              |
+  | WORKDIR     | Set direktori kerja default                           |
+  | EXPOSE      | Deklarasi port yang digunakan (dokumentasi)           |
+  | VOLUME      | Deklarasi direktori yang akan dijadikan volume        |
+  | USER        | Set user yang menjalankan proses                      |
+  | ENTRYPOINT  | Perintah utama yang dijalankan saat container start   |
+  | CMD         | Argumen default untuk ENTRYPOINT                      |
+  +-------------+-------------------------------------------------------+
+
+
+  ============================================================
+  TAHAP 2 — BUILD IMAGE (docker build)
+  ============================================================
+
+  Perintah:
+    docker build -t sonarqube:community .
+
+  Proses yang terjadi di balik layar:
+  ------------------------------------
+  Docker membaca Dockerfile baris per baris, setiap instruksi
+  menghasilkan LAYER baru yang di-stack satu sama lain.
+
+  Dockerfile             Proses Build            Hasil Layer
+  -------------------    --------------------    ----------------------------
+  FROM eclipse-temurin → Pull base image      → Layer 0: JRE Ubuntu (~200MB)
+  RUN groupadd...      → Exec di container    → Layer 1: user sonarqube
+  RUN curl ...         → Download & extract   → Layer 2: SonarQube binary
+  ENV SONARQUBE_HOME   → Set env variable     → Layer 3: env config
+  EXPOSE 9000          → Metadata saja        → (tidak buat layer baru)
+  ENTRYPOINT           → Metadata saja        → (tidak buat layer baru)
+  -------------------    --------------------    ----------------------------
+                                                 = IMAGE: sonarqube:community
+                                                   (stack semua layer)
+
+  Keunggulan sistem layer:
+  - Layer yang tidak berubah di-CACHE → build berikutnya lebih cepat
+  - Beberapa image bisa BERBAGI layer yang sama → hemat disk
+  - Setiap layer immutable (tidak bisa diubah setelah dibuat)
+
+  Alur lengkap docker build:
+  +------------------+
+  | Dockerfile       |
+  +--------+---------+
+           |
+           | docker build -t sonarqube:community .
+           v
+  +--------+---------+     +---------------------+
+  | Docker Daemon    |<----| Docker Registry      |
+  | (proses build)   |     | (pull base image     |
+  |                  |     |  jika belum ada)     |
+  +--------+---------+     +---------------------+
+           |
+           v
+  +--------+---------+
+  | Docker Image     |  <- hasil akhir, tersimpan lokal
+  | sonarqube:comm   |     di /var/lib/docker/overlay2/
+  | [Layer 0]        |
+  | [Layer 1]        |
+  | [Layer 2]        |
+  | [Layer 3]        |
+  +------------------+
+
+
+  ============================================================
+  TAHAP 3 — SIMPAN / DISTRIBUSI IMAGE
+  ============================================================
+
+  Setelah image jadi, ada 2 cara untuk menyimpan/berbagi:
+
+  Cara A: Push ke Docker Registry
+  --------------------------------
+  docker tag sonarqube:community username/sonarqube:community
+  docker push username/sonarqube:community
+
+  Registry  ---->  Docker Hub (hub.docker.com)  [public]
+            ---->  GitHub Container Registry    [public/private]
+            ---->  AWS ECR / GCP Artifact       [cloud private]
+            ---->  Harbor (self-hosted)         [on-premise]
+
+  Cara B: Export ke file .tar (untuk pindah server tanpa internet)
+  ----------------------------------------------------------------
+  docker save -o sonarqube-community.tar sonarqube:community
+  # File .tar ini bisa dicopy via SCP, USB, HDD, dsb.
+  # Di server tujuan: docker load -i sonarqube-community.tar
+
+
+  ============================================================
+  TAHAP 4 — JALANKAN CONTAINER (docker run / docker compose up)
+  ============================================================
+
+  Perintah:
+    docker run -d --name sonarqube -p 9000:9000 sonarqube:community
+
+  Atau via Docker Compose:
+    docker compose up -d
+
+  Proses yang terjadi saat docker run:
+  ------------------------------------
+
+  [1] Docker cari image di lokal
+      Jika tidak ada → otomatis pull dari registry
+
+  [2] Docker buat CONTAINER baru dari image
+      Image (read-only layers) + Writable Layer baru ditambahkan di atas
+
+      +-----------------------------+
+      | Writable Layer (Container)  |  <- perubahan runtime ditulis di sini
+      +-----------------------------+
+      | Layer 3: env config         |  <- read-only (dari image)
+      | Layer 2: SonarQube binary   |  <- read-only (dari image)
+      | Layer 1: user sonarqube     |  <- read-only (dari image)
+      | Layer 0: JRE Ubuntu         |  <- read-only (dari image)
+      +-----------------------------+
+
+  [3] Docker setup namespace & cgroup (isolasi)
+      - Network namespace  → container punya network sendiri
+      - PID namespace      → proses terisolasi dari host
+      - Mount namespace    → filesystem terisolasi
+      - cgroup             → batasi CPU & memory yang bisa dipakai
+
+  [4] Docker mount volume
+      sonarqube_sonarqube_data      → /opt/sonarqube/data
+      sonarqube_sonarqube_extensions → /opt/sonarqube/extensions
+      sonarqube_sonarqube_logs      → /opt/sonarqube/logs
+
+  [5] Docker setup network
+      Buat virtual network interface
+      Assign IP (misal 172.18.0.2) dalam network sonarqube_default
+      Map port: host:9000 → container:9000
+
+  [6] Docker inject environment variables
+      SONAR_JDBC_USERNAME=sonar
+      SONAR_JDBC_PASSWORD=sonar
+      SONAR_JDBC_URL=jdbc:postgresql://postgres:5432/sonarqube
+      ... dll
+
+  [7] Jalankan ENTRYPOINT
+      /opt/sonarqube/docker/entrypoint.sh
+      → Script ini memulai proses SonarQube di dalam container
+      → SonarQube konek ke PostgreSQL via JDBC URL
+      → Web server listen di port 9000
+
+  [8] Container berstatus RUNNING
+      docker ps → Up X seconds
+
+
+  ============================================================
+  DIAGRAM ALUR LENGKAP: DARI KODE KE CONTAINER BERJALAN
+  ============================================================
+
+  Developer                Docker Host              Browser/User
+  ---------                -----------              ------------
+  Tulis
+  Dockerfile
+      |
+      | docker build
+      v
+  +----------+   build    +------------------+
+  |Dockerfile|----------->| Docker Image     |
+  +----------+            | sonarqube:comm   |
+                          | [Layer 0,1,2,3]  |
+                          +--------+---------+
+                                   |
+                          (optional: docker push ke registry)
+                                   |
+                                   | docker run / docker compose up
+                                   v
+                          +--------+---------+
+                          | Docker Container  |
+                          |                   |
+                          | [Writable Layer]  |
+                          | [Layer 3] env     |
+                          | [Layer 2] app     |
+                          | [Layer 1] user    |
+                          | [Layer 0] OS/JRE  |
+                          |                   |
+                          | Network: 172.18.x |
+                          | Port: 9000        |
+                          | Volume: /data     |
+                          | Env: JDBC_URL=... |
+                          +--------+---------+
+                                   |
+                                   | port 9000
+                                   v
+                          http://IP-SERVER:9000 <--- User buka browser
+
+
+  ============================================================
+  KAITANNYA DENGAN CONTAINER SONARQUBE DI SERVER INI
+  ============================================================
+
+  Image sonarqube:community (ID: c8f39b0bc41b) dibuat dari Dockerfile
+  resmi SonarSource, di-pull dari Docker Hub 6 bulan lalu.
+
+  Saat ini container berjalan dengan konfigurasi:
+  - ENTRYPOINT : /opt/sonarqube/docker/entrypoint.sh  (dari Dockerfile)
+  - PORT       : 9000 (EXPOSE di Dockerfile, di-map saat docker run)
+  - VOLUME     : /opt/sonarqube/data,extensions,logs  (VOLUME di Dockerfile)
+  - ENV        : SONAR_JDBC_URL, USERNAME, PASSWORD    (dari docker-compose.yml)
+  - NETWORK    : sonarqube_default                     (dari docker-compose.yml)
+  - RESTART    : always                                (dari docker-compose.yml)
+
+
+================================================================================
+
+
 1. STATUS CONTAINER
 --------------------------------------------------------------------------------
   Status          : running
