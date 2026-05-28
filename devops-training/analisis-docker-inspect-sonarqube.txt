@@ -155,24 +155,366 @@
 
 
 9. CATATAN PENTING UNTUK MIGRASI SERVER
---------------------------------------------------------------------------------
-  Yang WAJIB dipindah:
-  [1] Docker Image    -> docker save -o sonarqube.tar sonarqube:community
-                         docker save -o postgres.tar postgres:13
-  [2] Docker Volumes  -> backup 3 volume named di atas (data, extensions, logs)
-  [3] docker-compose.yml -> salin dari /root/sonarqube/docker-compose.yml
+================================================================================
+
+  PRINSIP DASAR MIGRASI
+  ----------------------
+  Container bersifat sementara (ephemeral) → tidak perlu dipindah.
+  Yang dipindah adalah: IMAGE (aplikasi) + VOLUME (data) + docker-compose.yml (config).
+
+  +-------------------+---------------------------+-----------------------------+
+  |    Yang Dipindah  |  Berisi                   |  Cara Backup                |
+  +-------------------+---------------------------+-----------------------------+
+  | Docker Image      | Aplikasi, dependencies,   | docker save                 |
+  |                   | OS layer, Java, SonarQube | (export ke file .tar)       |
+  +-------------------+---------------------------+-----------------------------+
+  | Docker Volume     | Data project SonarQube,   | tar compress volume folder  |
+  |                   | plugin/extensions, logs   | via container alpine        |
+  +-------------------+---------------------------+-----------------------------+
+  | docker-compose.yml| Konfigurasi deployment    | cp / scp langsung           |
+  |                   | (env, port, network, dsb) |                             |
+  +-------------------+---------------------------+-----------------------------+
 
   Yang TIDAK perlu dipindah:
-  - Container itu sendiri (cukup recreate dari image + volume)
-  - Writable layer container
+  - Container itu sendiri        (ephemeral, dibuat ulang dari image + volume)
+  - Writable layer container     (data di sini hilang saat container dihapus)
+  - Volume anonymous /temp       (hanya cache sementara, tidak penting)
 
-  Urutan restore di server baru:
-  1. Install Docker + Docker Compose
-  2. docker load -i sonarqube.tar
-  3. docker load -i postgres.tar
-  4. Restore semua volume
-  5. Salin docker-compose.yml ke /root/sonarqube/
-  6. docker compose -f /root/sonarqube/docker-compose.yml up -d
+
+================================================================================
+  LANGKAH-LANGKAH MIGRASI DETAIL
+================================================================================
+
+  ============================================================
+  BAGIAN A — DI SERVER LAMA (ubuntu-serv1)
+  ============================================================
+
+  A1. PERSIAPAN — Buat Folder Backup
+  ------------------------------------------------------------
+  mkdir -p /root/migration-backup
+  cd /root/migration-backup
+
+  ------------------------------------------------------------
+  A2. MATIKAN CONTAINER (agar data konsisten saat di-backup)
+  ------------------------------------------------------------
+  # Masuk ke direktori docker-compose
+  cd /root/sonarqube
+
+  # Hentikan semua container secara graceful
+  docker compose down
+
+  # Verifikasi semua container sudah berhenti
+  docker ps
+
+  # Pastikan tidak ada yang running
+  # (output harus kosong atau tidak ada sonarqube/postgres)
+
+  ------------------------------------------------------------
+  A3. BACKUP DOCKER IMAGES
+  ------------------------------------------------------------
+  cd /root/migration-backup
+
+  # Backup image SonarQube (~1.22 GB)
+  docker save -o sonarqube-community.tar sonarqube:community
+  echo "Done: sonarqube image"
+
+  # Backup image PostgreSQL (~438 MB)
+  docker save -o postgres-13.tar postgres:13
+  echo "Done: postgres image"
+
+  # Verifikasi file backup image
+  ls -lh /root/migration-backup/*.tar
+
+  ------------------------------------------------------------
+  A4. BACKUP DOCKER VOLUMES (DATA APLIKASI)
+  ------------------------------------------------------------
+  cd /root/migration-backup
+
+  # Backup volume: sonarqube DATA (project analysis, settings)
+  docker run --rm \
+    -v sonarqube_sonarqube_data:/source \
+    -v /root/migration-backup:/backup \
+    alpine tar czf /backup/vol-sonarqube-data.tar.gz -C /source .
+  echo "Done: volume data"
+
+  # Backup volume: sonarqube EXTENSIONS (plugins)
+  docker run --rm \
+    -v sonarqube_sonarqube_extensions:/source \
+    -v /root/migration-backup:/backup \
+    alpine tar czf /backup/vol-sonarqube-extensions.tar.gz -C /source .
+  echo "Done: volume extensions"
+
+  # Backup volume: sonarqube LOGS
+  docker run --rm \
+    -v sonarqube_sonarqube_logs:/source \
+    -v /root/migration-backup:/backup \
+    alpine tar czf /backup/vol-sonarqube-logs.tar.gz -C /source .
+  echo "Done: volume logs"
+
+  # Verifikasi semua volume ter-backup
+  ls -lh /root/migration-backup/*.tar.gz
+
+  ------------------------------------------------------------
+  A5. BACKUP FILE DOCKER-COMPOSE
+  ------------------------------------------------------------
+  cp /root/sonarqube/docker-compose.yml /root/migration-backup/docker-compose.yml
+  echo "Done: docker-compose.yml"
+
+  ------------------------------------------------------------
+  A6. VERIFIKASI SEMUA FILE BACKUP
+  ------------------------------------------------------------
+  ls -lh /root/migration-backup/
+
+  # Output yang diharapkan:
+  # sonarqube-community.tar       (~1.2 GB)
+  # postgres-13.tar               (~430 MB)
+  # vol-sonarqube-data.tar.gz     (ukuran variatif)
+  # vol-sonarqube-extensions.tar.gz
+  # vol-sonarqube-logs.tar.gz
+  # docker-compose.yml
+
+  ------------------------------------------------------------
+  A7. TRANSFER FILE KE SERVER BARU
+  ------------------------------------------------------------
+  # Ganti IP_SERVER_BARU dengan IP aktual server tujuan
+
+  # Cara 1: SCP (satu per satu)
+  scp /root/migration-backup/sonarqube-community.tar    user@IP_SERVER_BARU:/root/migration-backup/
+  scp /root/migration-backup/postgres-13.tar            user@IP_SERVER_BARU:/root/migration-backup/
+  scp /root/migration-backup/vol-sonarqube-data.tar.gz  user@IP_SERVER_BARU:/root/migration-backup/
+  scp /root/migration-backup/vol-sonarqube-extensions.tar.gz user@IP_SERVER_BARU:/root/migration-backup/
+  scp /root/migration-backup/vol-sonarqube-logs.tar.gz  user@IP_SERVER_BARU:/root/migration-backup/
+  scp /root/migration-backup/docker-compose.yml         user@IP_SERVER_BARU:/root/migration-backup/
+
+  # Cara 2: Rsync (lebih cepat, bisa resume jika putus)
+  rsync -avz --progress /root/migration-backup/ user@IP_SERVER_BARU:/root/migration-backup/
+
+  # Cara 3: Via penyimpanan eksternal (USB/HDD)
+  # Copy semua file dari /root/migration-backup/ ke media eksternal
+  # Lalu copy dari media eksternal ke server baru
+
+
+  ============================================================
+  BAGIAN B — DI SERVER BARU
+  ============================================================
+
+  B1. INSTALL DOCKER & DOCKER COMPOSE
+  ------------------------------------------------------------
+  # Update sistem
+  apt update && apt upgrade -y
+
+  # Install Docker Engine
+  apt install -y ca-certificates curl gnupg
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+
+  echo "deb [arch=$(dpkg --print-architecture) \
+    signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+  apt update
+  apt install -y docker-ce docker-ce-cli containerd.io \
+                 docker-buildx-plugin docker-compose-plugin
+
+  # Verifikasi instalasi
+  docker --version
+  docker compose version
+
+  # Aktifkan Docker agar auto-start
+  systemctl enable docker
+  systemctl start docker
+
+  ------------------------------------------------------------
+  B2. KONFIGURASI KERNEL (WAJIB untuk SonarQube)
+  ------------------------------------------------------------
+  # SonarQube membutuhkan vm.max_map_count minimal 524288
+  sysctl -w vm.max_map_count=524288
+  sysctl -w fs.file-max=131072
+
+  # Agar permanen setelah reboot
+  echo "vm.max_map_count=524288" >> /etc/sysctl.conf
+  echo "fs.file-max=131072"      >> /etc/sysctl.conf
+
+  # Verifikasi
+  sysctl vm.max_map_count
+  # Output harus: vm.max_map_count = 524288
+
+  ------------------------------------------------------------
+  B3. LOAD DOCKER IMAGES
+  ------------------------------------------------------------
+  cd /root/migration-backup
+
+  # Load image SonarQube
+  docker load -i sonarqube-community.tar
+  echo "Done: sonarqube image loaded"
+
+  # Load image PostgreSQL
+  docker load -i postgres-13.tar
+  echo "Done: postgres image loaded"
+
+  # Verifikasi image sudah masuk
+  docker image ls
+  # Harus muncul: sonarqube:community dan postgres:13
+
+  ------------------------------------------------------------
+  B4. BUAT DOCKER VOLUMES
+  ------------------------------------------------------------
+  docker volume create sonarqube_sonarqube_data
+  docker volume create sonarqube_sonarqube_extensions
+  docker volume create sonarqube_sonarqube_logs
+
+  # Verifikasi volume dibuat
+  docker volume ls
+
+  ------------------------------------------------------------
+  B5. RESTORE DATA KE VOLUMES
+  ------------------------------------------------------------
+  cd /root/migration-backup
+
+  # Restore volume DATA
+  docker run --rm \
+    -v sonarqube_sonarqube_data:/target \
+    -v /root/migration-backup:/backup \
+    alpine tar xzf /backup/vol-sonarqube-data.tar.gz -C /target
+  echo "Done: restore volume data"
+
+  # Restore volume EXTENSIONS
+  docker run --rm \
+    -v sonarqube_sonarqube_extensions:/target \
+    -v /root/migration-backup:/backup \
+    alpine tar xzf /backup/vol-sonarqube-extensions.tar.gz -C /target
+  echo "Done: restore volume extensions"
+
+  # Restore volume LOGS
+  docker run --rm \
+    -v sonarqube_sonarqube_logs:/target \
+    -v /root/migration-backup:/backup \
+    alpine tar xzf /backup/vol-sonarqube-logs.tar.gz -C /target
+  echo "Done: restore volume logs"
+
+  ------------------------------------------------------------
+  B6. SIAPKAN FILE DOCKER-COMPOSE
+  ------------------------------------------------------------
+  mkdir -p /root/sonarqube
+  cp /root/migration-backup/docker-compose.yml /root/sonarqube/docker-compose.yml
+
+  # Periksa isi file sebelum dijalankan
+  cat /root/sonarqube/docker-compose.yml
+
+  ------------------------------------------------------------
+  B7. JALANKAN CONTAINER
+  ------------------------------------------------------------
+  cd /root/sonarqube
+
+  # Jalankan semua container (postgres duluan, lalu sonarqube)
+  docker compose up -d
+
+  # Pantau proses startup (tunggu ~1-2 menit)
+  docker compose logs -f
+
+  # Tekan Ctrl+C untuk keluar dari log
+
+  ------------------------------------------------------------
+  B8. VERIFIKASI SEMUA BERJALAN
+  ------------------------------------------------------------
+  # Cek status container
+  docker ps
+
+  # Output yang diharapkan:
+  # NAMES            STATUS         PORTS
+  # sonarqube        Up X seconds   0.0.0.0:9000->9000/tcp
+  # postgres-sonar   Up X seconds   5432/tcp
+
+  # Cek log SonarQube (pastikan tidak ada error)
+  docker logs sonarqube --tail 50
+
+  # Test akses web
+  curl -I http://localhost:9000
+  # HTTP/1.1 200 OK  →  SonarQube berhasil berjalan
+
+  ------------------------------------------------------------
+  B9. AKSES SONARQUBE DI BROWSER
+  ------------------------------------------------------------
+  URL     : http://IP_SERVER_BARU:9000
+  Username: admin
+  Password: admin  (default, ganti setelah login pertama)
+
+
+  ============================================================
+  RINGKASAN URUTAN MIGRASI
+  ============================================================
+
+  SERVER LAMA                          SERVER BARU
+  ─────────────────────────────────    ─────────────────────────────────
+  A1. Buat folder backup            →
+  A2. docker compose down           →
+  A3. docker save (images)          →
+  A4. tar backup volumes            →
+  A5. copy docker-compose.yml       →
+  A6. verifikasi file               →
+  A7. Transfer semua file ──────────→  B1. Install Docker & Compose
+                                       B2. Set kernel parameters
+                                       B3. docker load (images)
+                                       B4. docker volume create
+                                       B5. tar restore volumes
+                                       B6. copy docker-compose.yml
+                                       B7. docker compose up -d
+                                       B8. verifikasi container running
+                                       B9. test akses web :9000
+
+
+  ============================================================
+  ESTIMASI WAKTU & UKURAN
+  ============================================================
+
+  File                              Estimasi Ukuran
+  --------------------------------  ---------------
+  sonarqube-community.tar           ~1.2  GB
+  postgres-13.tar                   ~440  MB
+  vol-sonarqube-data.tar.gz         variatif (tergantung data proyek)
+  vol-sonarqube-extensions.tar.gz   variatif (tergantung plugin)
+  vol-sonarqube-logs.tar.gz         variatif
+  docker-compose.yml                < 5   KB
+  --------------------------------  ---------------
+  TOTAL minimum                     ~1.7  GB
+
+
+  ============================================================
+  TROUBLESHOOTING UMUM
+  ============================================================
+
+  MASALAH 1: SonarQube tidak mau start
+  ------------------------------------
+  Gejala  : container sonarqube langsung exit/restart
+  Cek     : docker logs sonarqube
+  Solusi  : jalankan perintah kernel parameter di B2
+            sysctl -w vm.max_map_count=524288
+
+  MASALAH 2: SonarQube tidak bisa konek ke database
+  ------------------------------------
+  Gejala  : error "Cannot connect to database"
+  Cek     : docker logs sonarqube | grep -i "error\|database"
+  Solusi  : pastikan container postgres running dulu
+            docker ps | grep postgres
+            pastikan env SONAR_JDBC_URL benar di docker-compose.yml
+
+  MASALAH 3: Port 9000 tidak bisa diakses dari luar
+  ------------------------------------
+  Gejala  : browser tidak bisa buka http://IP:9000
+  Cek     : ufw status
+  Solusi  : buka firewall
+            ufw allow 9000/tcp
+            ufw reload
+
+  MASALAH 4: Volume data kosong setelah restore
+  ------------------------------------
+  Gejala  : SonarQube jalan tapi project/data hilang
+  Cek     : ls /var/lib/docker/volumes/sonarqube_sonarqube_data/_data/
+  Solusi  : ulangi langkah B5, pastikan path tar xzf benar
 
 
 ================================================================================
