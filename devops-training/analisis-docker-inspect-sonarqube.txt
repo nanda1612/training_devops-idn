@@ -1,0 +1,180 @@
+================================================================================
+        ANALISIS LENGKAP: docker inspect sonarqube
+        Tanggal: 2026-05-28
+        Server : ubuntu-serv1
+================================================================================
+
+
+1. STATUS CONTAINER
+--------------------------------------------------------------------------------
+  Status          : running
+  Container ID    : cdd879693fa29762523e3e605bf9f3df6b7eaa66620f57f732321037388e0c91
+  Nama            : sonarqube
+  Image           : sonarqube:community
+  Dibuat          : 2025-11-11 03:39:08 UTC
+  Terakhir Start  : 2026-05-28 07:23:13 UTC (hari ini)
+  Terakhir Mati   : 2026-05-26 11:46:41 UTC (2 hari lalu)
+  PID             : 1231
+  Restart Policy  : always (otomatis hidup kembali jika mati / server reboot)
+  Entrypoint      : /opt/sonarqube/docker/entrypoint.sh
+
+
+2. ENVIRONMENT VARIABLES (KONFIGURASI PENTING)
+--------------------------------------------------------------------------------
+  SONAR_JDBC_USERNAME  = sonar
+  SONAR_JDBC_PASSWORD  = sonar
+  SONAR_JDBC_URL       = jdbc:postgresql://postgres:5432/sonarqube
+                         (koneksi ke container postgres, host "postgres" = nama container DB)
+
+  SONAR_VERSION        = 25.11.0.114957
+  JAVA_VERSION         = jdk-21.0.9+10
+  JAVA_HOME            = /opt/java/openjdk
+  SONARQUBE_HOME       = /opt/sonarqube
+  DOCKER_RUNNING       = true
+
+  SQ_DATA_DIR          = /opt/sonarqube/data
+  SQ_EXTENSIONS_DIR    = /opt/sonarqube/extensions
+  SQ_LOGS_DIR          = /opt/sonarqube/logs
+  SQ_TEMP_DIR          = /opt/sonarqube/temp
+  ES_TMPDIR            = /opt/sonarqube/temp
+
+
+3. VOLUME / PENYIMPANAN DATA
+--------------------------------------------------------------------------------
+  VOLUME NAME                          HOST PATH (di server)                          CONTAINER PATH
+  -----------------------------------  ---------------------------------------------  -------------------------
+  sonarqube_sonarqube_data         ->  /var/lib/docker/volumes/                    -> /opt/sonarqube/data
+                                       sonarqube_sonarqube_data/_data
+  sonarqube_sonarqube_extensions   ->  /var/lib/docker/volumes/                    -> /opt/sonarqube/extensions
+                                       sonarqube_sonarqube_extensions/_data
+  sonarqube_sonarqube_logs         ->  /var/lib/docker/volumes/                    -> /opt/sonarqube/logs
+                                       sonarqube_sonarqube_logs/_data
+  (anonymous)                      ->  /var/lib/docker/volumes/                    -> /opt/sonarqube/temp
+                                       ab81bbdf1deae454c59d7f3b889c916ce990cef72aae0f35a53bc03e875ea030/_data
+
+  CATATAN: Data asli tersimpan di /var/lib/docker/volumes/ → WAJIB di-backup saat pindah server!
+
+
+4. NETWORK / JARINGAN
+--------------------------------------------------------------------------------
+  Network Name    : sonarqube_default
+  IP Container    : 172.18.0.2
+  Gateway         : 172.18.0.1
+  Subnet          : 172.18.0.0/16
+  MAC Address     : 2a:4f:cf:5d:8a:40
+  DNS Names       : sonarqube, cdd879693fa2
+
+  Port Mapping    : 0.0.0.0:9000 (host) -> 9000/tcp (container)
+                    :::9000 (IPv6 host)  -> 9000/tcp (container)
+
+  Akses dari luar : http://IP-SERVER:9000  (SonarQube Web UI)
+
+
+5. DOCKER COMPOSE (FILE KONFIGURASI UTAMA)
+--------------------------------------------------------------------------------
+  File Konfigurasi  : /root/sonarqube/docker-compose.yml
+  Working Directory : /root/sonarqube
+  Project Name      : sonarqube
+  Compose Version   : 2.40.0
+  Depends On        : postgres (sonarqube menunggu postgres siap dulu)
+  Service Name      : sonarqube
+  Container Number  : 1
+
+
+6. LOKASI FILE PENTING DI SERVER
+--------------------------------------------------------------------------------
+  Yang Dicari                   Lokasi di Server
+  ----------------------------  ---------------------------------------------------------
+  File konfigurasi utama     -> /root/sonarqube/docker-compose.yml
+  Data SonarQube             -> /var/lib/docker/volumes/sonarqube_sonarqube_data/_data/
+  Extensions / Plugins       -> /var/lib/docker/volumes/sonarqube_sonarqube_extensions/_data/
+  Log SonarQube              -> /var/lib/docker/volumes/sonarqube_sonarqube_logs/_data/
+  Config dalam container     -> /opt/sonarqube/conf/sonar.properties
+  Log Docker container       -> /var/lib/docker/containers/cdd879693fa2.../cdd879693fa2...-json.log
+
+
+7. TOPOLOGI ARSITEKTUR
+--------------------------------------------------------------------------------
+
+  HOST SERVER (ubuntu-serv1)
+  +------------------------------------------------------------------+
+  |                                                                  |
+  |  /root/sonarqube/docker-compose.yml  <- file konfigurasi utama  |
+  |                                                                  |
+  |  Network: sonarqube_default (172.18.0.0/16)                     |
+  |  +------------------------+   +---------------------------+      |
+  |  | Container: sonarqube   |   | Container: postgres-sonar |      |
+  |  | IP: 172.18.0.2         |<--| IP: 172.18.0.x            |      |
+  |  | Port: 9000             |   | Port: 5432 (internal)     |      |
+  |  | User DB: sonar/sonar   |   | DB: sonarqube             |      |
+  |  +------------------------+   +---------------------------+      |
+  |           |                                                      |
+  |  Volumes (data persistent di host):                              |
+  |  /var/lib/docker/volumes/                                        |
+  |  +-- sonarqube_sonarqube_data/        <- data utama             |
+  |  +-- sonarqube_sonarqube_extensions/  <- plugins                |
+  |  +-- sonarqube_sonarqube_logs/        <- log aplikasi           |
+  |                                                                  |
+  +------------------------------------------------------------------+
+           |
+           v  (akses dari luar)
+     http://IP-SERVER:9000
+     (SonarQube Web UI)
+
+
+8. PERINTAH BERGUNA
+--------------------------------------------------------------------------------
+
+  # Lihat file docker-compose
+  cat /root/sonarqube/docker-compose.yml
+
+  # Lihat isi volume data
+  ls /var/lib/docker/volumes/sonarqube_sonarqube_data/_data/
+
+  # Masuk ke dalam container
+  docker exec -it sonarqube bash
+
+  # Lihat log container
+  docker logs sonarqube
+  docker logs sonarqube --tail 100
+
+  # Lihat konfigurasi sonar di dalam container
+  docker exec sonarqube cat /opt/sonarqube/conf/sonar.properties
+
+  # Backup volume data
+  docker run --rm \
+    -v sonarqube_sonarqube_data:/data \
+    -v $(pwd):/backup \
+    alpine tar czf /backup/sonarqube-data-backup.tar.gz /data
+
+  # Backup volume extensions
+  docker run --rm \
+    -v sonarqube_sonarqube_extensions:/data \
+    -v $(pwd):/backup \
+    alpine tar czf /backup/sonarqube-extensions-backup.tar.gz /data
+
+
+9. CATATAN PENTING UNTUK MIGRASI SERVER
+--------------------------------------------------------------------------------
+  Yang WAJIB dipindah:
+  [1] Docker Image    -> docker save -o sonarqube.tar sonarqube:community
+                         docker save -o postgres.tar postgres:13
+  [2] Docker Volumes  -> backup 3 volume named di atas (data, extensions, logs)
+  [3] docker-compose.yml -> salin dari /root/sonarqube/docker-compose.yml
+
+  Yang TIDAK perlu dipindah:
+  - Container itu sendiri (cukup recreate dari image + volume)
+  - Writable layer container
+
+  Urutan restore di server baru:
+  1. Install Docker + Docker Compose
+  2. docker load -i sonarqube.tar
+  3. docker load -i postgres.tar
+  4. Restore semua volume
+  5. Salin docker-compose.yml ke /root/sonarqube/
+  6. docker compose -f /root/sonarqube/docker-compose.yml up -d
+
+
+================================================================================
+  END OF REPORT
+================================================================================
