@@ -1,0 +1,166 @@
+================================================================================
+  ALUR DOCKER: SCRIPT → IMAGE → CONTAINER → BACKUP → PINDAH SERVER
+================================================================================
+
+
+STEP 1 — STRUKTUR FOLDER
+--------------------------------------------------------------------------------
+
+  /root/my-app/
+  ├── docker-compose.yml
+  ├── .env
+  └── app/
+      ├── Dockerfile
+      ├── requirements.txt
+      └── main.py
+
+
+STEP 2 — TULIS DOCKERFILE
+--------------------------------------------------------------------------------
+
+  FROM python:3.11-slim        ← base image (OS + runtime)
+  WORKDIR /app                 ← direktori kerja di container
+  COPY requirements.txt .      ← copy file dependency
+  RUN pip install -r requirements.txt  ← install dependency
+  COPY . .                     ← copy source code
+  EXPOSE 5000                  ← buka port
+  CMD ["python", "main.py"]    ← perintah saat container start
+
+
+STEP 3 — TULIS docker-compose.yml
+--------------------------------------------------------------------------------
+
+  services:
+    db:
+      image: postgres:16
+      volumes:
+        - db_data:/var/lib/postgresql/data
+      environment:
+        POSTGRES_PASSWORD: ${DB_PASS}
+
+    app:
+      build: ./app
+      ports:
+        - "80:5000"
+      depends_on:
+        - db
+
+  volumes:
+    db_data:
+
+
+STEP 4 — BUILD IMAGE
+--------------------------------------------------------------------------------
+
+  cd /root/my-app
+  docker compose build
+
+  # Verifikasi
+  docker image ls
+
+
+STEP 5 — JALANKAN CONTAINER
+--------------------------------------------------------------------------------
+
+  docker compose up -d
+
+  # Cek berjalan
+  docker ps
+  docker logs myapp-app
+
+
+STEP 6 — BACKUP (sebelum pindah server)
+--------------------------------------------------------------------------------
+
+  # Hentikan container dulu
+  docker compose down
+
+  mkdir -p /root/backup
+  cd /root/backup
+
+  # [A] Backup Images
+  docker save -o app.tar       my-app-app:latest
+  docker save -o postgres.tar  postgres:16
+
+  # [B] Backup Volumes (data)
+  docker run --rm \
+    -v myapp_db_data:/src -v /root/backup:/dst \
+    alpine tar czf /dst/vol-db.tar.gz -C /src .
+
+  # [C] Backup Config
+  cp -r /root/my-app /root/backup/config
+
+  # Kirim ke server baru
+  rsync -avz /root/backup/ user@IP_SERVER_BARU:/root/backup/
+
+
+STEP 7 — RESTORE DI SERVER BARU
+--------------------------------------------------------------------------------
+
+  # Install Docker
+  apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+  cd /root/backup
+
+  # [A] Load Images
+  docker load -i app.tar
+  docker load -i postgres.tar
+
+  # [B] Buat & Restore Volume
+  docker volume create myapp_db_data
+  docker run --rm \
+    -v myapp_db_data:/dst -v /root/backup:/src \
+    alpine tar xzf /src/vol-db.tar.gz -C /dst
+
+  # [C] Restore Config
+  cp -r /root/backup/config /root/my-app
+
+  # [D] Jalankan
+  cd /root/my-app
+  docker compose up -d
+
+  # Verifikasi
+  docker ps
+  curl http://localhost
+
+
+================================================================================
+  RINGKASAN ALUR
+================================================================================
+
+  Folder Script
+      └─[docker build]──► Image
+                              └─[docker run]──► Container
+                                                    │
+                                              [docker save]
+                                              [tar volume]
+                                              [copy config]
+                                                    │
+                                                    ▼
+                                             File Backup (.tar)
+                                                    │
+                                              [SCP / rsync]
+                                                    │
+                                             Server Baru
+                                                    │
+                                              [docker load]
+                                              [tar restore]
+                                              [compose up]
+                                                    │
+                                                    ▼
+                                          Container Berjalan ✓
+
+
+================================================================================
+  YANG WAJIB DI-BACKUP
+================================================================================
+
+  ✓ Docker Image       → docker save -o nama.tar <image>
+  ✓ Docker Volume      → tar czf backup via container alpine
+  ✓ docker-compose.yml → cp langsung
+  ✓ file .env          → cp langsung
+
+  ✗ Container          → TIDAK perlu, dibuat ulang dari image + volume
+
+
+================================================================================

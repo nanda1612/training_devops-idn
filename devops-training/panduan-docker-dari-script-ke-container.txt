@@ -1,0 +1,654 @@
+================================================================================
+     PANDUAN LENGKAP DOCKER
+     Dari Kumpulan Script → Image → Container → Backup → Pindah Server
+     Tanggal: 2026-05-29
+================================================================================
+
+
+GAMBARAN BESAR ALUR
+================================================================================
+
+  FOLDER SCRIPT/APLIKASI
+        |
+        | [1] Tulis Dockerfile
+        v
+  DOCKERFILE + SOURCE CODE
+        |
+        | [2] docker build
+        v
+  DOCKER IMAGE  (blueprint, tersimpan lokal)
+        |
+        | [3] docker run / docker compose up
+        v
+  DOCKER CONTAINER  (aplikasi berjalan)
+        |
+        | [4] Backup image + volume
+        v
+  FILE BACKUP (.tar + .tar.gz)
+        |
+        | [5] Transfer ke server baru
+        v
+  SERVER BARU  (docker load + restore volume)
+        |
+        | [6] docker compose up
+        v
+  CONTAINER BERJALAN DI SERVER BARU
+
+
+================================================================================
+TAHAP 1 — SIAPKAN STRUKTUR FOLDER APLIKASI
+================================================================================
+
+  Contoh: Aplikasi web Python (Flask) + Database PostgreSQL
+
+  Struktur folder yang umum digunakan:
+
+  /root/my-app/                        ← folder project utama
+  │
+  ├── docker-compose.yml               ← orkestrasi semua container
+  ├── .env                             ← variabel sensitif (password, dsb)
+  │
+  ├── app/                             ← folder source code aplikasi
+  │   ├── Dockerfile                   ← instruksi build image app
+  │   ├── requirements.txt             ← daftar library Python
+  │   ├── main.py                      ← kode utama aplikasi
+  │   └── templates/                   ← file HTML
+  │       └── index.html
+  │
+  └── nginx/                           ← folder config web server
+      ├── Dockerfile                   ← instruksi build image nginx
+      └── nginx.conf                   ← konfigurasi nginx
+
+  Penjelasan tiap file:
+  +---------------------+----------------------------------------------------+
+  | File                | Fungsi                                             |
+  +---------------------+----------------------------------------------------+
+  | Dockerfile          | Resep untuk membuat Docker Image                   |
+  | docker-compose.yml  | Menjalankan & menghubungkan banyak container       |
+  | .env                | Menyimpan variabel (tidak di-commit ke git)        |
+  | requirements.txt    | Daftar dependency/library yang dibutuhkan          |
+  | main.py             | Source code aplikasi utama                         |
+  | nginx.conf          | Konfigurasi reverse proxy                          |
+  +---------------------+----------------------------------------------------+
+
+
+================================================================================
+TAHAP 2 — TULIS DOCKERFILE
+================================================================================
+
+  Dockerfile adalah file instruksi untuk membangun image.
+  Setiap baris instruksi = 1 layer baru di dalam image.
+
+  ------------------------------------------------------------
+  Contoh: app/Dockerfile (Python Flask)
+  ------------------------------------------------------------
+  # Baris 1: Pilih base image (OS + runtime sudah tersedia)
+  FROM python:3.11-slim
+
+  # Baris 2: Set direktori kerja di dalam container
+  WORKDIR /app
+
+  # Baris 3: Copy file dependency dulu (agar layer ini di-cache)
+  COPY requirements.txt .
+
+  # Baris 4: Install dependency
+  RUN pip install --no-cache-dir -r requirements.txt
+
+  # Baris 5: Copy seluruh source code ke dalam image
+  COPY . .
+
+  # Baris 6: Buka port yang digunakan aplikasi
+  EXPOSE 5000
+
+  # Baris 7: Perintah yang dijalankan saat container start
+  CMD ["python", "main.py"]
+  ------------------------------------------------------------
+
+  ------------------------------------------------------------
+  Contoh: nginx/Dockerfile
+  ------------------------------------------------------------
+  FROM nginx:alpine
+  COPY nginx.conf /etc/nginx/nginx.conf
+  EXPOSE 80
+  ------------------------------------------------------------
+
+  Cara kerja Layer:
+  -----------------
+  Setiap instruksi Dockerfile menghasilkan layer yang di-cache.
+  Jika kode berubah (COPY . .) hanya layer itu dan di bawahnya
+  yang direbuild. Layer di atasnya tetap pakai cache → build cepat.
+
+  FROM python:3.11-slim    → Layer 0 (base OS + Python)
+  WORKDIR /app             → Layer 1 (set workdir)
+  COPY requirements.txt    → Layer 2 (file dependency)
+  RUN pip install          → Layer 3 (library terinstall) ← di-cache!
+  COPY . .                 → Layer 4 (source code)        ← rebuild jika kode berubah
+  EXPOSE 5000              → metadata (bukan layer)
+  CMD [...]                → metadata (bukan layer)
+
+
+================================================================================
+TAHAP 3 — TULIS docker-compose.yml
+================================================================================
+
+  Docker Compose menjalankan dan menghubungkan banyak container sekaligus.
+
+  ------------------------------------------------------------
+  Contoh: /root/my-app/docker-compose.yml
+  ------------------------------------------------------------
+  version: '3.8'
+
+  services:
+
+    # ── Container 1: Database ──────────────────────────────
+    db:
+      image: postgres:16                 # pakai image dari Docker Hub
+      container_name: myapp-db
+      restart: always
+      environment:
+        POSTGRES_USER: ${DB_USER}        # diambil dari file .env
+        POSTGRES_PASSWORD: ${DB_PASS}
+        POSTGRES_DB: myapp
+      volumes:
+        - db_data:/var/lib/postgresql/data   # data tersimpan di volume
+      networks:
+        - myapp-network
+
+    # ── Container 2: Aplikasi ─────────────────────────────
+    app:
+      build:
+        context: ./app                   # lokasi Dockerfile
+        dockerfile: Dockerfile
+      container_name: myapp-app
+      restart: always
+      environment:
+        DATABASE_URL: postgresql://${DB_USER}:${DB_PASS}@db:5432/myapp
+      volumes:
+        - app_uploads:/app/uploads       # data upload user
+      ports:
+        - "5000:5000"
+      depends_on:
+        - db                             # tunggu db siap dulu
+      networks:
+        - myapp-network
+
+    # ── Container 3: Web Server ───────────────────────────
+    nginx:
+      build:
+        context: ./nginx
+        dockerfile: Dockerfile
+      container_name: myapp-nginx
+      restart: always
+      ports:
+        - "80:80"                        # akses dari luar via port 80
+      depends_on:
+        - app
+      networks:
+        - myapp-network
+
+  # ── Definisi Volume ───────────────────────────────────
+  volumes:
+    db_data:                             # data database
+    app_uploads:                         # file upload
+
+  # ── Definisi Network ──────────────────────────────────
+  networks:
+    myapp-network:
+      driver: bridge
+  ------------------------------------------------------------
+
+  ------------------------------------------------------------
+  Contoh: /root/my-app/.env
+  ------------------------------------------------------------
+  DB_USER=myappuser
+  DB_PASS=r4hasi4Ku!
+  ------------------------------------------------------------
+
+
+================================================================================
+TAHAP 4 — BUILD IMAGE (docker build)
+================================================================================
+
+  Perintah:
+  ---------
+  cd /root/my-app
+
+  # Build image untuk app (jika tidak pakai docker-compose)
+  docker build -t myapp-app:1.0 ./app
+
+  # Build semua service sekaligus via docker-compose
+  docker compose build
+
+  # Build ulang tanpa cache (jika ada perubahan besar)
+  docker compose build --no-cache
+
+  Proses yang terjadi saat build:
+  --------------------------------
+  [1] Docker baca Dockerfile baris per baris
+  [2] Tiap instruksi dijalankan dalam container sementara
+  [3] Hasilnya di-snapshot menjadi layer baru
+  [4] Semua layer digabung menjadi 1 image
+  [5] Image disimpan di /var/lib/docker/overlay2/
+
+  Verifikasi image berhasil dibuat:
+  ----------------------------------
+  docker image ls
+
+  Output:
+  REPOSITORY    TAG       IMAGE ID       CREATED         SIZE
+  myapp-app     1.0       a1b2c3d4e5f6   2 minutes ago   245MB
+  myapp-nginx   latest    b2c3d4e5f6a7   2 minutes ago   43MB
+  postgres      16        c3d4e5f6a7b8   2 weeks ago     438MB
+
+
+================================================================================
+TAHAP 5 — JALANKAN CONTAINER (docker compose up)
+================================================================================
+
+  Perintah:
+  ---------
+  cd /root/my-app
+
+  # Jalankan semua container di background
+  docker compose up -d
+
+  # Pantau proses startup
+  docker compose logs -f
+
+  # Cek semua container berjalan
+  docker ps
+
+  Urutan yang terjadi:
+  --------------------
+  [1] Docker buat network: myapp-network
+  [2] Docker buat volume: db_data, app_uploads
+  [3] Container db (postgres) dijalankan pertama (depends_on)
+  [4] Container app dijalankan setelah db siap
+  [5] Container nginx dijalankan setelah app siap
+  [6] Port 80 dan 5000 terbuka di host
+
+  Topologi container yang berjalan:
+  -----------------------------------
+
+  HOST SERVER (/root/my-app/)
+  +----------------------------------------------------------------+
+  |                                                                |
+  |  Network: myapp-network (bridge)                               |
+  |                                                                |
+  |  +----------------+    +----------------+    +-------------+  |
+  |  | myapp-nginx    |    | myapp-app      |    | myapp-db    |  |
+  |  | nginx:alpine   |--->| myapp-app:1.0  |--->| postgres:16 |  |
+  |  | port: 80       |    | port: 5000     |    | port: 5432  |  |
+  |  | (proxy ke app) |    | (Flask API)    |    | (internal)  |  |
+  |  +----------------+    +-------+--------+    +------+------+  |
+  |         ^                      |                    |          |
+  |         |                      |                    |          |
+  |  Port 80 terbuka         app_uploads volume    db_data volume  |
+  |  ke luar                 /app/uploads          /var/lib/pgsql  |
+  |                                                                |
+  +----------------------------------------------------------------+
+          |
+          v  Akses dari browser
+    http://IP-SERVER
+
+
+================================================================================
+TAHAP 6 — VERIFIKASI CONTAINER BERJALAN
+================================================================================
+
+  # Lihat semua container yang running
+  docker ps
+
+  # Lihat log spesifik satu container
+  docker logs myapp-app
+  docker logs myapp-db
+  docker logs myapp-nginx
+
+  # Masuk ke dalam container (debugging)
+  docker exec -it myapp-app bash
+  docker exec -it myapp-db psql -U myappuser -d myapp
+
+  # Lihat penggunaan resource
+  docker stats
+
+  # Lihat detail konfigurasi container
+  docker inspect myapp-app
+
+  # Lihat volume yang ada
+  docker volume ls
+
+  # Lihat network yang ada
+  docker network ls
+
+
+================================================================================
+TAHAP 7 — BACKUP (IMAGE + VOLUME + CONFIG)
+================================================================================
+
+  Sebelum backup, pastikan data konsisten:
+  -----------------------------------------
+  cd /root/my-app
+  docker compose down          # hentikan semua container
+  docker ps                    # verifikasi semua sudah stop
+
+  Buat folder backup:
+  -------------------
+  mkdir -p /root/backup-myapp
+  cd /root/backup-myapp
+
+  ------------------------------------------------------------
+  7A. BACKUP DOCKER IMAGES
+  ------------------------------------------------------------
+  # Export image aplikasi ke file .tar
+  docker save -o myapp-app.tar myapp-app:1.0
+  echo "Done: myapp-app image"
+
+  # Export image nginx
+  docker save -o myapp-nginx.tar myapp-nginx:latest
+  echo "Done: myapp-nginx image"
+
+  # Export image postgres (dari Docker Hub, bisa di-pull ulang
+  # tapi lebih aman di-backup juga untuk konsistensi versi)
+  docker save -o postgres-16.tar postgres:16
+  echo "Done: postgres image"
+
+  # Verifikasi
+  ls -lh /root/backup-myapp/*.tar
+
+  ------------------------------------------------------------
+  7B. BACKUP DOCKER VOLUMES (DATA APLIKASI)
+  ------------------------------------------------------------
+  # Backup volume database (PALING PENTING)
+  docker run --rm \
+    -v myapp_db_data:/source \
+    -v /root/backup-myapp:/backup \
+    alpine tar czf /backup/vol-db-data.tar.gz -C /source .
+  echo "Done: database volume"
+
+  # Backup volume uploads
+  docker run --rm \
+    -v myapp_app_uploads:/source \
+    -v /root/backup-myapp:/backup \
+    alpine tar czf /backup/vol-app-uploads.tar.gz -C /source .
+  echo "Done: uploads volume"
+
+  # CATATAN: Nama volume = <nama_project>_<nama_volume>
+  # Cek nama volume aktual dengan: docker volume ls
+
+  ------------------------------------------------------------
+  7C. BACKUP FILE KONFIGURASI
+  ------------------------------------------------------------
+  # Copy seluruh folder project (termasuk docker-compose.yml, .env, dll)
+  cp -r /root/my-app /root/backup-myapp/my-app-config
+  echo "Done: config files"
+
+  ------------------------------------------------------------
+  7D. VERIFIKASI SEMUA FILE BACKUP
+  ------------------------------------------------------------
+  ls -lh /root/backup-myapp/
+
+  # Output yang diharapkan:
+  # myapp-app.tar           (image aplikasi)
+  # myapp-nginx.tar         (image nginx)
+  # postgres-16.tar         (image database)
+  # vol-db-data.tar.gz      (data database)
+  # vol-app-uploads.tar.gz  (data upload)
+  # my-app-config/          (folder config lengkap)
+
+  ------------------------------------------------------------
+  7E. TRANSFER KE SERVER BARU
+  ------------------------------------------------------------
+  # Cara 1: SCP (via SSH)
+  scp -r /root/backup-myapp/ user@IP_SERVER_BARU:/root/backup-myapp/
+
+  # Cara 2: Rsync (lebih cepat, bisa resume jika putus)
+  rsync -avz --progress /root/backup-myapp/ user@IP_SERVER_BARU:/root/backup-myapp/
+
+  # Cara 3: Compress dulu lalu kirim
+  tar czf /root/backup-myapp-full.tar.gz /root/backup-myapp/
+  scp /root/backup-myapp-full.tar.gz user@IP_SERVER_BARU:/root/
+
+  # Cara 4: Via media eksternal (USB/HDD)
+  # Copy folder /root/backup-myapp/ ke media → bawa ke server baru
+
+
+================================================================================
+TAHAP 8 — RESTORE DAN JALANKAN DI SERVER BARU
+================================================================================
+
+  ------------------------------------------------------------
+  8A. INSTALL DOCKER DI SERVER BARU
+  ------------------------------------------------------------
+  apt update && apt upgrade -y
+
+  apt install -y ca-certificates curl gnupg
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+
+  echo "deb [arch=$(dpkg --print-architecture) \
+    signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+  apt update
+  apt install -y docker-ce docker-ce-cli containerd.io \
+                 docker-buildx-plugin docker-compose-plugin
+
+  systemctl enable docker
+  systemctl start docker
+
+  # Verifikasi
+  docker --version
+  docker compose version
+
+  ------------------------------------------------------------
+  8B. LOAD DOCKER IMAGES
+  ------------------------------------------------------------
+  cd /root/backup-myapp
+
+  docker load -i myapp-app.tar
+  docker load -i myapp-nginx.tar
+  docker load -i postgres-16.tar
+
+  # Verifikasi semua image sudah masuk
+  docker image ls
+
+  ------------------------------------------------------------
+  8C. BUAT VOLUME DAN RESTORE DATA
+  ------------------------------------------------------------
+  # Buat volume (nama harus sama persis dengan server lama)
+  docker volume create myapp_db_data
+  docker volume create myapp_app_uploads
+
+  # Restore data database
+  docker run --rm \
+    -v myapp_db_data:/target \
+    -v /root/backup-myapp:/backup \
+    alpine tar xzf /backup/vol-db-data.tar.gz -C /target
+  echo "Done: restore database"
+
+  # Restore data uploads
+  docker run --rm \
+    -v myapp_app_uploads:/target \
+    -v /root/backup-myapp:/backup \
+    alpine tar xzf /backup/vol-app-uploads.tar.gz -C /target
+  echo "Done: restore uploads"
+
+  # Verifikasi isi volume
+  ls /var/lib/docker/volumes/myapp_db_data/_data/
+  ls /var/lib/docker/volumes/myapp_app_uploads/_data/
+
+  ------------------------------------------------------------
+  8D. RESTORE KONFIGURASI
+  ------------------------------------------------------------
+  # Copy folder config ke lokasi yang sama
+  cp -r /root/backup-myapp/my-app-config /root/my-app
+
+  # Atau jika via rsync sudah terbawa semua
+  ls /root/my-app/
+
+  # Pastikan file .env ada dan benar
+  cat /root/my-app/.env
+
+  ------------------------------------------------------------
+  8E. JALANKAN CONTAINER
+  ------------------------------------------------------------
+  cd /root/my-app
+
+  # Jalankan semua container
+  docker compose up -d
+
+  # Pantau log startup
+  docker compose logs -f
+  # (Ctrl+C untuk keluar)
+
+  # Cek status container
+  docker ps
+
+  ------------------------------------------------------------
+  8F. VERIFIKASI APLIKASI BERJALAN
+  ------------------------------------------------------------
+  # Cek semua container running
+  docker ps
+
+  # Test akses web
+  curl -I http://localhost
+  # HTTP/1.1 200 OK  →  berhasil!
+
+  # Akses dari browser
+  # http://IP_SERVER_BARU
+
+
+================================================================================
+DIAGRAM ALUR LENGKAP END-TO-END
+================================================================================
+
+  DEVELOPER / SERVER LAMA              TRANSFER              SERVER BARU
+  ──────────────────────────           ────────           ──────────────────
+
+  /root/my-app/
+  ├── Dockerfile
+  ├── docker-compose.yml
+  ├── .env
+  └── app/main.py
+          |
+          | docker compose build
+          v
+  +──────────────────+
+  │  Docker Images   │
+  │  myapp-app:1.0   │
+  │  myapp-nginx     │
+  │  postgres:16     │
+  +────────+─────────+
+           |
+           | docker compose up -d
+           v
+  +──────────────────+
+  │Docker Containers │
+  │  myapp-nginx     │
+  │  myapp-app       │──> Volume: app_uploads
+  │  myapp-db        │──> Volume: db_data
+  +────────+─────────+
+           |
+           | docker compose down
+           | docker save → *.tar
+           | tar czf     → *.tar.gz
+           | cp config   → folder
+           v
+  +──────────────────+
+  │  Backup Files    │   ──── SCP / Rsync ────>   +──────────────────+
+  │  myapp-app.tar   │                             │  Backup Files    │
+  │  postgres-16.tar │                             │  (sama persis)   │
+  │  vol-db.tar.gz   │                             +────────+─────────+
+  │  vol-uploads.gz  │                                      |
+  │  my-app-config/  │                                      | docker load
+  +──────────────────+                                      | volume restore
+                                                            | docker compose up
+                                                            v
+                                                   +──────────────────+
+                                                   │Docker Containers │
+                                                   │  myapp-nginx     │
+                                                   │  myapp-app       │
+                                                   │  myapp-db        │
+                                                   │  (data lengkap)  │
+                                                   +────────+─────────+
+                                                            |
+                                                   http://IP_SERVER_BARU
+
+
+================================================================================
+RINGKASAN CHECKLIST MIGRASI
+================================================================================
+
+  SERVER LAMA - BACKUP
+  [ ] 1.  docker compose down                 (hentikan container)
+  [ ] 2.  docker save → image app             (backup image)
+  [ ] 3.  docker save → image nginx           (backup image)
+  [ ] 4.  docker save → image postgres        (backup image)
+  [ ] 5.  tar backup volume db_data           (backup data DB)
+  [ ] 6.  tar backup volume app_uploads       (backup data upload)
+  [ ] 7.  copy folder config (incl. .env)     (backup konfigurasi)
+  [ ] 8.  verifikasi semua file backup ada
+  [ ] 9.  transfer semua file ke server baru
+
+  SERVER BARU - RESTORE
+  [ ] 10. install Docker + Docker Compose
+  [ ] 11. docker load → semua image
+  [ ] 12. docker volume create → semua volume
+  [ ] 13. tar restore → volume db_data
+  [ ] 14. tar restore → volume app_uploads
+  [ ] 15. copy/restore folder config
+  [ ] 16. docker compose up -d
+  [ ] 17. docker ps → verifikasi semua container running
+  [ ] 18. curl / buka browser → verifikasi aplikasi jalan
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+  MASALAH 1: docker compose build gagal
+  ---------------------------------------
+  Gejala  : error saat build image
+  Cek     : apakah Dockerfile ada dan benar?
+            apakah nama file di COPY sesuai dengan yang ada?
+  Solusi  : docker compose build --no-cache
+            periksa error message dengan seksama
+
+  MASALAH 2: Container langsung exit setelah di-start
+  -----------------------------------------------------
+  Gejala  : docker ps menunjukkan container "Exited"
+  Cek     : docker logs <nama-container>
+  Solusi  : periksa apakah CMD/ENTRYPOINT di Dockerfile benar
+            periksa apakah environment variable sudah terset
+
+  MASALAH 3: Container tidak bisa saling konek
+  ---------------------------------------------
+  Gejala  : app tidak bisa konek ke db
+  Cek     : apakah nama service di DATABASE_URL sesuai?
+            misal: postgresql://user:pass@db:5432/myapp
+            "db" harus sama dengan nama service di docker-compose.yml
+  Solusi  : periksa docker-compose.yml bagian services dan network
+
+  MASALAH 4: Volume kosong setelah restore
+  -----------------------------------------
+  Gejala  : data tidak ada setelah pindah server
+  Cek     : ls /var/lib/docker/volumes/<nama_volume>/_data/
+  Solusi  : ulangi langkah restore, pastikan nama volume sama persis
+            cek: docker volume ls di server lama vs server baru
+
+  MASALAH 5: Port tidak bisa diakses dari luar
+  ---------------------------------------------
+  Gejala  : curl localhost berhasil tapi dari browser luar tidak bisa
+  Cek     : ufw status
+  Solusi  : ufw allow 80/tcp
+            ufw allow 443/tcp
+            ufw reload
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
