@@ -33,7 +33,41 @@ Kamu bisa kembali ke versi mana pun kapan pun kamu mau.
 
 ---
 
-## 1. Konfigurasi Awal
+## 1. Persiapan Sebelum Mulai
+
+Sebelum melakukan konfigurasi, pastikan Git sudah terinstal di komputer kamu.
+
+### Instalasi Git
+
+| Sistem Operasi | Cara Instalasi |
+|----------------|----------------|
+| **Linux (Ubuntu/Debian)** | `sudo apt update && sudo apt install git` |
+| **Linux (Fedora/RHEL)** | `sudo dnf install git` |
+| **macOS** | `brew install git` atau install Xcode Command Line Tools |
+| **Windows** | Download dari [git-scm.com](https://git-scm.com/download/win), jalankan installer |
+
+### Verifikasi Instalasi
+
+Setelah instalasi, pastikan Git dapat dijalankan:
+
+```bash
+git --version
+# Contoh output: git version 2.43.0
+```
+
+Jika muncul nomor versi, Git sudah siap digunakan.
+
+### Prasyarat Lainnya
+
+- **Terminal / Command Prompt** — tempat menjalankan perintah Git
+- **Text Editor** (opsional, tapi disarankan) — untuk menulis kode dan pesan commit.
+  Rekomendasi: VS Code, Neovim, atau Nano
+- **Akun Git remote** (opsional untuk tahap ini) — GitHub, GitLab, atau Bitbucket
+  diperlukan nanti saat ingin menyimpan repository ke server
+
+---
+
+## 2. Konfigurasi Awal
 
 Sebelum mulai, kita harus kenalkan diri kita ke Git.
 Identitas ini akan tercatat di setiap commit yang kita buat.
@@ -59,7 +93,7 @@ cat $HOME/.gitconfig
 
 ---
 
-## 2. Membuat Repository
+## 3. Membuat Repository
 
 Repository adalah "gudang" tempat Git menyimpan seluruh riwayat project.
 
@@ -80,7 +114,7 @@ ls -la
 
 ---
 
-## 3. Mengelola File
+## 4. Mengelola File
 
 ### Status File
 
@@ -172,7 +206,7 @@ git rm --cached file.txt
 
 ---
 
-## 4. Membatalkan Perubahan
+## 5. Membatalkan Perubahan
 
 Tiga skenario umum saat ingin membatalkan sesuatu:
 
@@ -200,7 +234,7 @@ git revert --continue         ← selesaikan
 
 ---
 
-## 5. Branching dan Merging
+## 6. Branching dan Merging
 
 ### Apa itu Branch?
 
@@ -283,7 +317,7 @@ kode dari branch yang di-merge (dev)
 
 ---
 
-## 6. Tagging
+## 7. Tagging
 
 Tag adalah **penanda permanen** pada commit tertentu. Berbeda dengan branch yang terus bergerak maju setiap ada commit baru, tag **selalu menunjuk ke satu commit yang sama** selamanya.
 
