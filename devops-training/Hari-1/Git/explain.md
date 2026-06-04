@@ -3,6 +3,39 @@
 
 ---
 
+## Apa itu Git?
+
+**Git** adalah sistem *version control* terdistribusi yang dibuat oleh **Linus Torvalds** pada tahun 2005 — orang yang sama yang menciptakan kernel Linux.
+
+Git bekerja dengan cara **merekam snapshot** dari seluruh isi project setiap kali kamu melakukan commit. Berbeda dengan sistem lama yang hanya menyimpan daftar perubahan per file, Git menyimpan kondisi penuh project di setiap titik waktu.
+
+### Karakteristik utama Git:
+
+| Karakteristik | Penjelasan |
+|---------------|------------|
+| **Terdistribusi** | Setiap developer punya salinan penuh repository di komputernya sendiri — tidak bergantung server |
+| **Cepat** | Hampir semua operasi berjalan lokal, tanpa perlu koneksi internet |
+| **Aman** | Setiap commit diberi hash unik (SHA-1) — data tidak bisa diubah tanpa terdeteksi |
+| **Non-linear** | Mendukung ribuan branch paralel yang bisa digabungkan kapan saja |
+| **Gratis & Open Source** | Bebas digunakan untuk project apapun |
+
+### Git vs tanpa Git
+
+```
+Tanpa Git                          Dengan Git
+──────────────────────────────     ──────────────────────────────────────
+Satu folder, banyak file duplikat  Satu folder, semua versi tersimpan
+Tidak tahu siapa yang mengubah     Setiap perubahan tercatat + nama + waktu
+Sulit kerja tim — file saling      Tim bisa kerja paralel tanpa bentrok
+  timpa satu sama lain             (dengan branch)
+Tidak bisa balik ke versi lama     Bisa kembali ke titik mana pun
+```
+
+> Git bukan hanya alat untuk programmer. Desainer, penulis teknis, dan data scientist
+> pun menggunakan Git untuk melacak perubahan pada file yang mereka kerjakan.
+
+---
+
 ## Mengapa Kita Butuh Git?
 
 Bayangkan kamu mengerjakan skripsi tanpa Git:
