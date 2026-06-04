@@ -225,6 +225,49 @@ File `sonar-project.properties` berisi konfigurasi project seperti:
 
 ---
 
+## Apakah Sonar Scanner Bisa Dijalankan Lewat GUI?
+
+**Sonar Scanner sendiri tidak memiliki GUI** — ini murni tool CLI. Namun ada beberapa cara menjalankan analisis lewat antarmuka visual:
+
+### 1. SonarLint (Paling Mirip GUI)
+
+Plugin IDE yang menganalisis kode **secara real-time** saat kamu menulis, tanpa perlu run manual dari terminal.
+
+| IDE | Cara Install |
+|-----|-------------|
+| VS Code | Extensions → cari `SonarLint` |
+| IntelliJ / WebStorm | Plugins → cari `SonarLint` |
+| Eclipse | Marketplace → cari `SonarLint` |
+
+SonarLint bisa dihubungkan ke SonarQube Server (**Connected Mode**) agar menggunakan Quality Gate dan rules yang sama dengan server.
+
+### 2. Lewat Jenkins UI
+
+Jika SonarScanner sudah dikonfigurasi di Jenkinsfile, cukup klik **"Build Now"** di dashboard Jenkins — scanner berjalan di belakang layar.
+
+```
+Jenkins Dashboard → pilih job → Build Now → lihat hasil di Console Output
+```
+
+### 3. SonarQube Web UI (Trigger Manual)
+
+Di SonarQube versi **Developer Edition ke atas**, ada fitur trigger analisis langsung dari web UI.
+Di **Community Edition** (yang dipakai di training ini) fitur ini tidak tersedia — analisis harus dipicu lewat CLI atau CI/CD.
+
+### Ringkasan Perbandingan
+
+| Cara | GUI? | Keterangan |
+|------|------|------------|
+| `sonar-scanner` CLI | Tidak | Cara standar di training ini |
+| SonarLint (IDE plugin) | Ya | Real-time, langsung di editor saat menulis kode |
+| Jenkins UI | Ya | Klik "Build Now", scanner jalan di agent |
+| SonarQube Web UI | Terbatas | Hanya Developer / Enterprise Edition |
+
+> Untuk kebutuhan sehari-hari developer, **SonarLint** adalah cara paling praktis karena
+> feedback langsung muncul di editor sebelum kode di-commit.
+
+---
+
 ## Instalasi SonarQube Server
 
 SonarQube Server bisa diinstall dengan dua cara:
