@@ -1,5 +1,5 @@
-# Korelasi Slide Training DevOps (PDF) dengan File Materi
-**Training DevOps - ID-Networkers** | Instruktur: Bazigan Tsamara
+# Slide Training DevOps (PDF) dengan File Materi
+**Training DevOps - ID-Networkers**
 
 ---
 
