@@ -188,10 +188,47 @@ git clone <url>
 
 ### Penjelasan dari Slide
 
-- **CI/CD Pipeline** adalah otomasi alur dari commit kode sampai ke production:
-  ```
-  Commit → Trigger Build → Build → Run Tests → Deliver Build → Deploy
-  ```
+#### Apa itu CI/CD?
+
+**CI (Continuous Integration)** adalah praktik di mana setiap perubahan kode yang di-push oleh developer secara otomatis diintegrasikan, di-build, dan diuji. Tujuannya adalah mendeteksi bug sedini mungkin sebelum kode masuk ke production.
+
+**CD (Continuous Delivery / Continuous Deployment)** adalah kelanjutan dari CI — setelah kode lulus semua pengujian, proses pengiriman ke staging atau production dilakukan secara otomatis tanpa intervensi manual.
+
+| Istilah | Kepanjangan | Fokus |
+|---------|-------------|-------|
+| CI | Continuous Integration | Integrasi & pengujian kode otomatis |
+| CD | Continuous Delivery | Pengiriman ke staging secara otomatis (approval manual ke production) |
+| CD | Continuous Deployment | Deploy ke production sepenuhnya otomatis |
+
+#### Kenapa CI/CD Penting?
+
+Tanpa CI/CD, proses rilis software memakan waktu lama karena build, test, dan deploy dilakukan secara manual dan rentan human error. Dengan CI/CD:
+- Bug terdeteksi lebih cepat (fail fast).
+- Kode yang masuk ke production selalu sudah melalui serangkaian validasi otomatis.
+- Tim bisa merilis fitur lebih sering dengan risiko lebih rendah.
+
+#### Alur CI/CD Pipeline
+
+```
+Developer push code ke GitHub
+         ↓
+CI Pipeline:
+  Trigger Build (webhook/polling)
+         ↓
+  Build (compile / install dependency)
+         ↓
+  Unit Tests + Integration Tests
+         ↓
+  Code Analysis (SonarQube)
+         ↓
+CD Pipeline:
+  Deploy ke Staging
+         ↓
+  Review & Approval
+         ↓
+  Deploy ke Production
+```
+
 - **CI Pipeline:** Build + Unit Tests + Integration Tests
 - **CD Pipeline:** Review + Staging + Production
 - **Jenkins** adalah free open source CI/CD tools yang menjalankan build, testing, deployment, dan step lainnya secara otomatis.
