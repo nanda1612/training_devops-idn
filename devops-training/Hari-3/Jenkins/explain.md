@@ -1,8 +1,76 @@
 # Penjelasan Materi Jenkins
 
+## Apa itu CI/CD?
+
+**CI/CD** adalah singkatan dari **Continuous Integration** dan **Continuous Delivery/Deployment** — sebuah praktik DevOps untuk mengotomatiskan seluruh proses pengiriman software mulai dari kode ditulis hingga berjalan di production.
+
+### Continuous Integration (CI)
+
+CI adalah praktik di mana setiap developer secara rutin menggabungkan (merge) perubahan kodenya ke repository bersama, lalu proses **build dan testing dijalankan secara otomatis**. Tujuannya:
+- Mendeteksi bug atau konflik kode sedini mungkin.
+- Memastikan kode selalu dalam kondisi siap di-build.
+- Menghindari "integration hell" — kondisi di mana kode banyak developer sulit digabungkan karena terlalu lama terpisah.
+
+```
+Developer push code
+        ↓
+Build otomatis
+        ↓
+Unit Test + Integration Test otomatis
+        ↓
+Laporan hasil (pass/fail)
+```
+
+### Continuous Delivery (CD)
+
+CD adalah kelanjutan dari CI — setelah kode lulus semua pengujian, proses **pengiriman ke staging atau production disiapkan secara otomatis**. Perbedaan antara Delivery dan Deployment:
+
+| | Continuous Delivery | Continuous Deployment |
+|--|--------------------|-----------------------|
+| Arti | Siap deploy kapan saja, tapi butuh approval manual | Deploy ke production sepenuhnya otomatis |
+| Cocok untuk | Tim yang butuh kontrol sebelum rilis | Tim dengan test coverage sangat tinggi |
+
+### Kenapa CI/CD Penting?
+
+Tanpa CI/CD, proses rilis software dilakukan manual — build manual, test manual, upload manual — yang lambat dan rawan human error. Dengan CI/CD:
+
+- Rilis bisa dilakukan lebih sering dengan risiko lebih kecil.
+- Bug terdeteksi lebih cepat sebelum sampai ke production.
+- Developer bisa fokus menulis kode, bukan mengurus proses deployment.
+
+---
+
 ## Apa itu Jenkins?
 
 Jenkins adalah tools open-source untuk **Continuous Integration / Continuous Delivery (CI/CD)**. Jenkins membantu tim developer untuk mengotomatiskan proses build, test, dan deploy aplikasi secara konsisten dan berulang tanpa intervensi manual.
+
+---
+
+## Hubungan Jenkins dengan CI/CD
+
+Jenkins adalah salah satu **implementasi** dari CI/CD. Jika CI/CD adalah konsepnya, maka Jenkins adalah tools yang mewujudkan konsep tersebut.
+
+```
+Konsep CI/CD  →  Diwujudkan oleh  →  Jenkins
+```
+
+Berikut bagaimana Jenkins menjalankan tiap bagian CI/CD:
+
+| Konsep CI/CD | Peran Jenkins |
+|--------------|---------------|
+| Trigger otomatis saat ada push kode | Jenkins memantau GitHub via webhook/polling |
+| Build otomatis | Jenkins menjalankan stage `Build` (npm install, dll) |
+| Test otomatis | Jenkins menjalankan stage `Testing` (npm test) |
+| Code quality check | Jenkins menjalankan stage `Code Review` (sonar-scanner) |
+| Deploy otomatis ke staging/production | Jenkins menjalankan stage `Deploy` (docker compose up) |
+| Backup artifact | Jenkins menjalankan stage `Backup` (docker compose push) |
+
+Jenkins menggunakan **Jenkinsfile** (Pipeline Script) untuk mendefinisikan seluruh alur CI/CD dalam bentuk kode. Setiap kali ada perubahan di repository, Jenkins otomatis menjalankan pipeline dari awal hingga akhir.
+
+```
+GitHub (push) → Jenkins (trigger) → Pipeline berjalan otomatis
+    └─ Build → Test → Code Review → Deploy → Backup
+```
 
 ---
 
@@ -37,7 +105,79 @@ sudo apt-get install jenkins
 
 ---
 
-## 2. Agent
+## 2. Cara Menjalankan Jenkins
+
+Setelah Jenkins terinstal, Jenkins berjalan sebagai **service (daemon)** di sistem operasi. Berikut cara mengelola dan mengaksesnya.
+
+### a. Kelola Service Jenkins
+
+```bash
+# Jalankan Jenkins
+sudo systemctl start jenkins
+
+# Hentikan Jenkins
+sudo systemctl stop jenkins
+
+# Restart Jenkins
+sudo systemctl restart jenkins
+
+# Cek status Jenkins (running/stopped)
+sudo systemctl status jenkins
+
+# Aktifkan Jenkins agar otomatis berjalan saat server reboot
+sudo systemctl enable jenkins
+```
+
+Jika status menunjukkan `active (running)`, berarti Jenkins sudah berjalan dengan benar.
+
+### b. Akses Jenkins via Browser
+
+Jenkins memiliki antarmuka web (Web UI). Setelah service berjalan, akses melalui browser:
+
+```
+http://<ip-server>:8080
+```
+
+Contoh: `http://192.168.1.10:8080`
+
+### c. Setup Awal Jenkins (Pertama Kali)
+
+Saat pertama kali diakses, Jenkins meminta **Administrator Password** untuk unlock. Password tersebut tersimpan otomatis di server:
+
+```bash
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Salin password tersebut, paste ke kolom yang tersedia di browser, lalu lanjutkan setup:
+
+1. **Unlock Jenkins** — masukkan initial admin password.
+2. **Install Plugins** — pilih *"Install suggested plugins"* untuk menginstal plugin yang umum dipakai.
+3. **Buat Admin User** — isi username, password, dan email untuk akun admin Jenkins.
+4. **Jenkins siap digunakan.**
+
+### d. Alur Penggunaan Jenkins
+
+Setelah Jenkins berjalan, berikut alur umum penggunaannya:
+
+```
+1. Login ke Web UI (http://ip:8080)
+         ↓
+2. Tambahkan Agent (node) di menu "Manage Jenkins > Nodes"
+         ↓
+3. Buat Job/Pipeline baru (New Item > Pipeline)
+         ↓
+4. Hubungkan ke repository GitHub (SCM)
+         ↓
+5. Tulis atau arahkan ke Jenkinsfile
+         ↓
+6. Jalankan Build (manual / otomatis via webhook)
+         ↓
+7. Pantau hasil di Dashboard Jenkins
+```
+
+---
+
+## 4. Agent
 
 Agent adalah mesin (node) yang menjalankan job/pipeline Jenkins. Jenkins Controller (master) mendistribusikan pekerjaan ke agent.
 
@@ -56,7 +196,7 @@ sudo update-alternatives --config java
 
 ---
 
-## 3. Pipeline / Jenkinsfile
+## 5. Pipeline / Jenkinsfile
 
 Pipeline adalah serangkaian tahapan (stages) otomatis yang mendefinisikan alur CI/CD dari suatu aplikasi. Pipeline ditulis dalam file bernama `Jenkinsfile` menggunakan sintaks **Groovy DSL**.
 
@@ -83,7 +223,7 @@ pipeline {
 
 ---
 
-## 4. Penjelasan Tiap Stage
+## 6. Penjelasan Tiap Stage
 
 ### Stage 1: Pull SCM
 ```groovy
