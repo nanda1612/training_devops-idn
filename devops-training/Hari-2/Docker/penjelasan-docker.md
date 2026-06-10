@@ -125,3 +125,92 @@ Docker Compose adalah alat untuk mendefinisikan dan menjalankan aplikasi yang te
 - `docker compose down` — menghentikan dan menghapus semua container
 
 Dibandingkan menjalankan container satu per satu dengan `docker run`, Docker Compose jauh lebih praktis karena seluruh konfigurasi (port, volume, network, environment) tersimpan dalam satu file yang bisa di-*version control* bersama kode aplikasi.
+
+---
+
+## 11. Menghapus Resource Docker
+
+Docker menyimpan banyak resource (image, container, volume, network) yang bisa menumpuk dan memenuhi disk. Berikut cara menghapusnya, dari yang paling spesifik hingga yang paling menyeluruh.
+
+### Hapus Container
+
+```bash
+# Hentikan container yang sedang berjalan
+docker stop <nama-container>
+
+# Hapus satu container (harus sudah berhenti)
+docker rm <nama-container>
+
+# Hentikan dan hapus sekaligus
+docker rm -f <nama-container>
+
+# Hapus semua container yang sudah berhenti
+docker container prune
+
+# Hapus semua container (berjalan + berhenti)
+docker rm -f $(docker ps -aq)
+```
+
+### Hapus Image
+
+```bash
+# Hapus satu image
+docker rmi <nama-image>
+
+# Hapus image walaupun masih dipakai container (paksa)
+docker rmi -f <nama-image>
+
+# Hapus semua image yang tidak dipakai container manapun
+docker image prune -a
+
+# Hapus semua image
+docker rmi -f $(docker images -aq)
+```
+
+### Hapus Volume
+
+```bash
+# Hapus satu volume
+docker volume rm <nama-volume>
+
+# Hapus semua volume yang tidak terhubung ke container manapun
+docker volume prune
+
+# Hapus semua volume (termasuk yang aktif — DATA HILANG)
+docker volume rm $(docker volume ls -q)
+```
+
+> **Hati-hati:** menghapus volume akan menghapus data di dalamnya secara permanen.
+
+### Hapus Network
+
+```bash
+# Hapus satu network
+docker network rm <nama-network>
+
+# Hapus semua network yang tidak dipakai
+docker network prune
+```
+
+### Hapus Semua Sekaligus (Docker System Prune)
+
+```bash
+# Hapus container berhenti + image tidak terpakai + network tidak terpakai
+docker system prune
+
+# Termasuk volume yang tidak terpakai
+docker system prune --volumes
+
+# Hapus semua resource tanpa konfirmasi (PALING AGRESIF)
+docker system prune -af --volumes
+```
+
+### Ringkasan Perintah Hapus
+
+| Target | Spesifik | Semua yang Tidak Terpakai | Semua (Paksa) |
+|--------|----------|--------------------------|---------------|
+| Container | `docker rm <nama>` | `docker container prune` | `docker rm -f $(docker ps -aq)` |
+| Image | `docker rmi <nama>` | `docker image prune -a` | `docker rmi -f $(docker images -aq)` |
+| Volume | `docker volume rm <nama>` | `docker volume prune` | `docker volume rm $(docker volume ls -q)` |
+| Network | `docker network rm <nama>` | `docker network prune` | — |
+| Semua | — | `docker system prune` | `docker system prune -af --volumes` |
