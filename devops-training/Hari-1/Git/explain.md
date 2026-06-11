@@ -1,5 +1,5 @@
 # Git: Version Control System
-### *"Cara profesional menyimpan dan melacak perubahan kode"*
+### *"Menyimpan dan melacak perubahan kode"*
 
 ---
 
