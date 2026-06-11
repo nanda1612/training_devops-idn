@@ -1,9 +1,10 @@
 # SonarQube: Platform Kualitas Kode
-### *"Temukan bug sebelum bug menemukan kamu di production"*
 
 ---
 
 ## Apa itu SonarQube?
+
+![SonarQube Dashboard](https://docs.sonarsource.com/files/UmHOpVCT5ShBivJ60cGK)
 
 **SonarQube** adalah platform *open source* untuk melakukan **analisis kualitas kode secara otomatis** (Static Code Analysis). SonarQube membaca source code kamu — tanpa menjalankannya — lalu melaporkan masalah yang ditemukan: bug, celah keamanan, kode yang tidak efisien, hingga duplikasi.
 
@@ -164,6 +165,8 @@ Satu saja FAIL    → Quality Gate: ❌ FAILED
 > Quality Gate bisa dikustomisasi sesuai standar tim atau perusahaan.
 > Misalnya: coverage minimal 70%, tidak boleh ada Blocker bug sama sekali.
 
+![SonarQube Quality Gate](https://docs.sonarsource.com/files/1CrZkpzlA6IZ5HoLHklF)
+
 ---
 
 ## Alur Kerja dengan CI/CD
@@ -232,6 +235,10 @@ File `sonar-project.properties` berisi konfigurasi project seperti:
 ### 1. SonarLint (Paling Mirip GUI)
 
 Plugin IDE yang menganalisis kode **secara real-time** saat kamu menulis, tanpa perlu run manual dari terminal.
+
+![SonarLint di VS Code](https://github.com/SonarSource/sonarlint-vscode/raw/HEAD/images/sonarlint_overview.png)
+
+![SonarLint Deteksi Masalah](https://github.com/SonarSource/sonarlint-vscode/raw/HEAD/images/sonarqube-for-vscode.gif)
 
 | IDE | Cara Install |
 |-----|-------------|
