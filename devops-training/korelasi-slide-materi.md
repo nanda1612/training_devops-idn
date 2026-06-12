@@ -136,11 +136,36 @@ git clone <url>
   → PASS: Merge/Promote | FAIL: kembali ke developer
   ```
 - **Arsitektur SonarQube:**
+
+  Seperti terlihat pada gambar di bawah, arsitektur SonarQube terdiri dari tiga bagian utama yang saling terhubung:
+
   ```
-  Scanner (CI/CD) → kirim Analysis Report via HTTP
-  → SonarQube Server (Web Server + Compute Engine + Search Server)
-  → Database Server
+  ┌─────────────────────────┐          ┌──────────────────────────────────────────┐
+  │     Scanner (CI/CD)     │          │             SonarQube Server             │
+  │                         │          │                                          │
+  │  Source Files           │  HTTP(S) │  ┌────────────┐                         │
+  │       ↓                 │ ──────── │  │ Web Server │ ←──────────────┐        │
+  │  Scanner & Language     │ Analysis │  └─────┬──────┘                │        │
+  │  Analyzers              │  Report  │        │ Queue                 │        │
+  │                         │          │        ↓                       ↓        │
+  │                         │          │  ┌──────────────┐   ┌───────────────┐  │
+  │                         │          │  │ Compute      │ ↔ │ Search Server │  │
+  │                         │          │  │ Engine       │   └───────────────┘  │
+  │                         │          │  └──────┬───────┘                      │
+  └─────────────────────────┘          └─────────│────────────────────────────--┘
+                                                 ↓
+                                       ┌─────────────────┐
+                                       │ Database Server  │
+                                       └─────────────────┘
   ```
+
+  | Komponen | Peran |
+  |----------|-------|
+  | **Scanner & Language Analyzers** | Bertugas membaca dan memeriksa kode program, lalu mengirim hasilnya ke SonarQube Server. Anggap saja seperti **petugas pemeriksa** yang datang ke lokasi (kode kamu), mencatat semua temuan, lalu mengirim laporan ke kantor pusat (server) lewat internet. Laporan dikirim secara aman menggunakan HTTPS — seperti amplop tersegel — sehingga isi laporan dan kata sandi tidak bisa dibaca orang lain di jaringan. |
+  | **Web Server** | Menerima laporan dari scanner, melayani dashboard UI, dan mendelegasikan tugas komputasi ke Compute Engine |
+  | **Compute Engine** | Memproses Analysis Report dari antrian (*queue*), menghitung metrik, dan menyimpan hasilnya ke database |
+  | **Search Server** | Mengindeks data hasil analisis agar pencarian di dashboard (issues, rules) bisa berjalan cepat |
+  | **Database Server** | Menyimpan seluruh riwayat analisis, konfigurasi project, Quality Gate, dan rules |
 
 ### Korelasi dengan File Materi
 
